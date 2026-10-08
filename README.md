@@ -91,7 +91,8 @@ to the rule planner and says so in the activity feed.
 
 ## Features
 
-- Live top-down ASCII city: roads, buildings, vehicles with lights, flames and smoke, flood water, theft alarms, crews on foot
+- Live top-down ASCII city: hand-drawn buildings, distinct vehicles with flashing lights, flames and smoke, flood water, theft alarms, crews on foot
+- Units that finish an incident while another is waiting and the depot is empty are redirected straight there instead of returning to base
 - Three incident types (fire, theft, flood) at six sites and three severities, with escalation and a city-health score
 - A\* routing, kerb parking, U-turns and reversing into bays, plus background traffic that stops for cars ahead
 - A persistent Strands agent with tool calls, run in a background thread so the city never freezes
@@ -119,6 +120,27 @@ to the rule planner and says so in the activity feed.
 HIGH severity needs **2 units**, MEDIUM and LOW need 1. Units stay busy until they are back in their bay, so with
 several incidents the planner has to choose. Incidents nobody attends **escalate** one level after ~45 s and city
 health drops while they burn / flood / are robbed.
+
+## Reading the map
+
+| Vehicle | Look |
+| --- | --- |
+| Fire engine | Longest vehicle, red, with a white ladder (`═`) along the roof and a cab that flashes red and yellow |
+| Police car | White with a blue cab and a roof light bar (`●`) flashing red and blue |
+| Rescue truck | Orange with a white cross (`✚`) on the box; the cab flashes amber and white |
+| Cars, vans, buses | Pale or coloured with a light-blue windshield and no lights; vans and buses are longer |
+
+Emergency vehicles carry their unit number at the rear.
+
+| Building | Look |
+| --- | --- |
+| Houses | Pitched roofs, a door and windows, some lit |
+| Offices | Dark towers with a grid of lit and unlit windows |
+| Fire station, police, rescue centre | Coloured roof edge, roof beacons and bay doors that open when a unit leaves |
+| Hospital | White block with a red cross, windows and a helipad (`H`) |
+| Substation | Transformers, live wires and a fenced yard |
+| Warehouse | Corrugated roof and loading docks |
+| Park | Trees, flowers, a pond and a bench |
 
 ## How the decision is made
 

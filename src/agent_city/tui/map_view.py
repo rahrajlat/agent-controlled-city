@@ -21,7 +21,7 @@ LOT = {"houses": "#4f7a45", "park": "#3f7d4a", "offices": "#6d6b70", "substation
        "warehouse": "#66645e"}
 DEPOT_STYLE = {"fire": ("#b4443a", " FIRE STATION "), "police": ("#2f4f9a", " POLICE "),
                "rescue": ("#d9822b", " RESCUE CENTRE ")}
-VEHICLE_BG = {"fire": ("#d62828", "#2a6fdb"), "police": ("#2a6fdb", "#e8e8f0"), "rescue": ("#e8892b", "#f2d33c")}
+EMERGENCY_LAMPS = {"fire": ("#ff3b30", "#ffd23f"), "police": ("#ff3b30", "#3d7bff"), "rescue": ("#ffb02e", "#f6f6f6")}
 CREW_FG = {"firefighters": "#ffd23f", "officers": "#7fd4ff", "rescuers": "#ffa64d"}
 FLAME = ["#ff3b1f", "#ff7a1a", "#ffb02e", "#ffe27a"]
 SMOKE = ["#3a3a40", "#55555c", "#74747c", "#9a9aa2"]
@@ -31,6 +31,12 @@ TAG = {IncidentType.FIRE: ("▲", "#ff6b4a", "#f4b942"), IncidentType.THEFT: ("�
 ARROWS = {0: "▲", 1: "▶", 2: "▼", 3: "◀"}
 
 Cell = tuple  # (char, fg, bg, bold)
+
+
+def _shade(color: str, f: float) -> str:
+    """Scale a #rrggbb colour's brightness by f (<1 darker, >1 lighter)."""
+    r, g, b = (int(color[i:i + 2], 16) for i in (1, 3, 5))
+    return "#%02x%02x%02x" % tuple(max(0, min(255, int(c * f))) for c in (r, g, b))
 
 
 def _arrow(heading: float) -> str:
@@ -99,6 +105,17 @@ class MapView:
                 old = grid[r][c]
                 grid[r][c] = (ch if ch is not None else old[0], fg or old[1], bg or old[2], bold)
 
+    def _sprite(self, grid, x, z, rows, bold=False):
+        """Stamp a small hand-drawn sprite (rows of (char, fg, bg) cells) centred on a world position."""
+        col, row = self.to_cell(x, z)
+        col -= len(rows[0]) // 2
+        row -= len(rows) // 2
+        for dr, cells in enumerate(rows):
+            for dc, (ch, fg, bg) in enumerate(cells):
+                r, c = row + dr, col + dc
+                if 0 <= r < self._size[1] and 0 <= c < self._size[0]:
+                    grid[r][c] = (ch, fg, bg, bold)
+
     def _label(self, grid, x, z, text, fg, bg, bold=True):
         col, row = self.to_cell(x, z)
         col = max(0, min(self._size[0] - len(text), col - len(text) // 2))
@@ -116,35 +133,72 @@ class MapView:
             self._paint(grid, cx - 4.2, cx + 4.2, cz + 0.2, cz + 4.2, " ", "#ffffff", color)
             self._paint(grid, cx - 4.2, cx + 4.2, door_z, cz + 0.2, " ", "#ffffff", "#4a4d54")
             self._label(grid, cx, cz + 2.4, label, "#ffffff", color)
+            roof = _shade(color, 0.7)
+            self._paint(grid, cx - 4.2, cx + 4.2, cz + 3.5, cz + 4.2, "▀", _shade(color, 1.25), roof)   # roof edge
+            lamp = ("#ff4d4d", "#4d8bff") if depot.service != "rescue" else ("#ffb02e", "#ffb02e")
+            self._put(grid, cx - 4.0, cz + 4.0, "●", lamp[0], roof, True)                                    # roof beacons
+            self._put(grid, cx + 4.0, cz + 4.0, "●", lamp[1], roof, True)
         hx, hz = self.city.buildings["hospital"].pos
         self._paint(grid, hx - 3.8, hx + 3.8, hz - 1.7, hz + 3.0, " ", "#ffffff", "#eef1f4")
         self._paint(grid, hx - 0.2, hx + 0.2, hz - 0.6, hz + 1.9, "┃", "#d62828", "#eef1f4", True)
         self._label(grid, hx, hz - 0.6, "  HOSPITAL  ", "#1b2a3a", "#eef1f4")
+        self._paint(grid, hx - 3.8, hx + 3.8, hz + 2.6, hz + 3.0, "▀", "#b8c0ca", "#eef1f4")             # roof edge
+        self._sprite(grid, hx + 2.6, hz + 1.2, [[("(", "#ffd23f", "#3c4a5a"), ("H", "#ffd23f", "#3c4a5a"),
+                                                  (")", "#ffd23f", "#3c4a5a")]], True)                   # helipad
+        self._sprite(grid, hx - 2.8, hz + 1.2, [[("▪", "#7fb7e6", "#eef1f4"), ("▪", "#7fb7e6", "#eef1f4"),
+                                                  ("▪", "#7fb7e6", "#eef1f4")]])                         # windows
         sx, sz = self.city.buildings["substation"].pos
         self._paint(grid, sx - 4.0, sx + 4.0, sz - 4.0, sz + 4.0, None, "#666b73", "#6c6c66")
         for dx in (-2.4, 0, 2.4):
             self._paint(grid, sx + dx - 0.8, sx + dx + 0.8, sz - 0.4, sz + 1.2, "▓", "#5f7a94", "#4d6580")
+        self._paint(grid, sx - 3.8, sx + 3.8, sz + 2.2, sz + 2.5, "┄", "#9aa0a8", "#6c6c66")             # fence
+        self._paint(grid, sx - 3.8, sx + 3.8, sz - 3.7, sz - 3.4, "┄", "#9aa0a8", "#6c6c66")
+        self._paint(grid, sx - 3.8, sx + 3.8, sz + 1.5, sz + 1.9, "═", "#d4a72c", "#6c6c66")             # live wires
+        for dx in (-2.4, 0, 2.4):
+            self._put(grid, sx + dx, sz + 1.7, "╤", "#d4a72c", "#6c6c66", True)                         # insulators
+        self._sprite(grid, sx + 3.0, sz - 1.4, [[("ϟ", "#ffd23f", "#6c6c66")]], True)                    # danger sign
         self._label(grid, sx, sz - 2.6, " SUBSTATION ", "#101820", "#c9c3b4")
         wb = self.city.buildings["warehouse"]
         x0, x1, z0, z1 = wb.rect
         self._paint(grid, x0, x1, z0, z1, " ", "#ffffff", "#8d887a")
-        self._paint(grid, x0, x1, z0, z0 + 0.6, "▀", "#3d6a9e", "#8d887a")
+        zc = z0
+        while zc < z1:                                    # corrugated roof: a ridge line on every other row
+            self._paint(grid, x0, x1, zc, zc + 0.2, "═", "#a8a291", "#8d887a")
+            zc += 1.6
+        dock_w = (x1 - x0) / 5
+        for k in range(4):                                # loading docks along the front wall
+            dx = x0 + dock_w * (k + 0.6)
+            self._paint(grid, dx, dx + dock_w * 0.7, z0, z0 + 0.5, "▮", "#2f5f94", "#6f6a5e", True)
         self._label(grid, wb.pos[0], wb.pos[1] - 0.6, " WAREHOUSE ", "#1b1b1b", "#d9d2bf")
         rng = random.Random(9)
         for (bx, bz), kind in self.city.block_kinds.items():
             for sx_ in (-1, 1):
                 for sz_ in (-1, 1):
                     px, pz = bx + sx_ * 2.1, bz + sz_ * 2.1
-                    if kind == "houses":
-                        col = rng.choice(["#f2d0a4", "#e8b4b8", "#b8d8d8", "#f4e285", "#cdb4db"])
-                        self._paint(grid, px - 1.2, px + 1.2, pz - 1.1, pz + 1.1, "⌂", "#8a4b3a", col, True)
-                    elif kind == "offices":
-                        shade = rng.choice(["#8da9c4", "#b0b8c4", "#a5a58d", "#9db4c0"])
-                        self._paint(grid, px - 1.5, px + 1.5, pz - 1.5, pz + 1.5, "▒", "#30384a", shade)
+                    if kind == "houses":                           # pitched roof over a wall with windows and a door
+                        wall = rng.choice(["#f2d0a4", "#e8b4b8", "#b8d8d8", "#f4e285", "#cdb4db"])
+                        roof = rng.choice(["#a8483a", "#8a5a44", "#5f6f8f", "#7a4f6d"])
+                        lot = LOT["houses"]
+                        win = "#5a86b3" if rng.random() < 0.6 else "#ffd966"       # some windows are lit
+                        self._sprite(grid, px, pz, [
+                            [("◢", roof, lot), ("█", roof, roof), ("◣", roof, lot)],
+                            [("▪", win, wall), ("▮", "#6b4226", wall), ("▪", win, wall)]], True)
+                    elif kind == "offices":                        # tower: roof edge over a grid of windows
+                        wall = rng.choice(["#2f3d5a", "#34435f", "#2c3a52"])
+                        roof = _shade(wall, 1.6)
+                        rows = [[("▄", roof, wall)] * 4]
+                        for _ in range(2):
+                            rows.append([("▪", "#ffd966" if rng.random() < 0.45 else "#56688a", wall) for _ in range(4)])
+                        self._sprite(grid, px, pz, rows)
             if kind == "park":
                 self._paint(grid, bx + 0.6, bx + 3.9, bz - 3.0, bz - 0.7, "≈", "#bfe9ff", "#3d8fd0")
                 for (dx, dz) in [(-3, -3), (-3, 3), (3, 3), (-1.9, 1.7), (1.9, 3.2), (-3.3, 0.2), (0.2, -3.4), (-2.2, -1.9)]:
                     self._paint(grid, bx + dx - 0.3, bx + dx + 0.3, bz + dz - 0.3, bz + dz + 0.3, "♣", "#1f6a2e", "#3f7d4a", True)
+            if kind == "park":
+                for (dx, dz), fc in zip([(-3.4, -1.2), (-0.6, -2.4), (1.0, 3.3), (3.4, 1.4), (-1.0, 0.9)],
+                                        ["#ff8fab", "#ffd166", "#f4a6ff", "#ff8fab", "#ffd166"]):
+                    self._put(grid, bx + dx, bz + dz, "✿", fc, "#3f7d4a", True)
+                self._paint(grid, bx - 0.4, bx + 1.4, bz + 1.4, bz + 1.7, "═", "#8a6a43", "#3f7d4a", True)   # bench
             if kind == "offices":
                 self._label(grid, bx, bz, " OFFICES ", "#1b2433", "#b0b8c4")
             if kind == "park":
@@ -252,20 +306,57 @@ class MapView:
             x = (x0 + x1) / 2 + span * math.sin(self.t * 1.3)
             self._put(grid, x, z0 - 0.6, "☻", "#ff4fd8", None, True)
 
+    def _stamp_vehicle(self, grid, x, z, heading, cells):
+        """Draw a vehicle as a short strip of cells (listed rear -> front), lengthwise along its heading."""
+        c, r = self.to_cell(x, z)
+        h = int(((heading % 360) + 45) // 90) % 4          # 0 north, 1 east, 2 south, 3 west
+        n = len(cells)
+        if h in (1, 3):                                    # moving along a road running east-west
+            seq = cells if h == 1 else cells[::-1]
+            n_cols = n
+            for i, (ch, fg, bg) in enumerate(seq):
+                self._set(grid, r, c - n_cols // 2 + i, ch, fg, bg)
+        else:                                              # north-south: two rows is about as long as a car
+            seq = [cells[0], cells[-1]] if n > 2 else cells
+            seq = seq[::-1] if h == 0 else seq              # facing north the front is the top row
+            for i, (ch, fg, bg) in enumerate(seq):
+                self._set(grid, r - len(seq) // 2 + i, c, ch, fg, bg)
+
+    def _set(self, grid, r, c, ch, fg, bg):
+        if 0 <= r < self._size[1] and 0 <= c < self._size[0]:
+            grid[r][c] = (ch, fg, bg, True)
+
+    def _civilian_cells(self, v):
+        body, glass = v.color, "#cfe8ff"
+        if v.kind == "bus":
+            return [("▪", glass, body)] * 3 + [("▌", glass, _shade(body, 0.8))]
+        if v.kind == "van":
+            return [("▬", _shade(body, 0.7), body), (" ", body, body), ("▪", glass, _shade(body, 0.8))]
+        return [(" ", body, body), ("▪", glass, _shade(body, 0.8))]
+
+    def _emergency_cells(self, svc, veh, flash):
+        lamp = EMERGENCY_LAMPS[svc][0 if flash else 1] if veh.lights_on else "#555566"
+        digit = veh.id[-1]
+        if svc == "fire":       # long red engine, white ladder along the roof, cab at the front
+            body = "#d62828"
+            return [(digit, "#ffffff", body), ("═", "#f5f5f5", body), ("═", "#f5f5f5", body),
+                    ("╫", "#ffffff", lamp if veh.lights_on else "#8f1d1d")]
+        if svc == "police":     # white car with a blue stripe and a roof light bar
+            return [(digit, "#2a6fdb", "#f2f4f8"), ("●", lamp, "#f2f4f8"),
+                    ("▪", "#5aa0e0", "#2a6fdb" if not veh.lights_on else lamp)]
+        body = "#e8892b"        # rescue: orange truck with a white cross on the box
+        return [(digit, "#ffffff", body), ("✚", "#ffffff", "#c26a14"),
+                ("▪", "#ffffff", lamp if veh.lights_on else "#8f5a1c")]
+
     def _draw_vehicles(self, grid):
         for v in self.city.traffic:
             x, z = v.render_pos
-            self._put(grid, x, z, _arrow(v.heading), v.color, ROAD_BG, True)
+            self._stamp_vehicle(grid, x, z, v.heading, self._civilian_cells(v))
         flash = int(self.t * 5) % 2 == 0
         for svc, depot in self.city.depots.items():
-            a, b = VEHICLE_BG[svc]
             for veh in depot.vehicles:
                 x, z = veh.render_pos
-                bg = (a if flash else b) if veh.lights_on else "#555566"
-                self._put(grid, x, z, _arrow(veh.heading), "#ffffff", bg, True)
-                c, r = self.to_cell(x, z)
-                if 0 <= r < self._size[1] and 0 <= c + 1 < self._size[0]:
-                    grid[r][c + 1] = (veh.id[-1], "#ffffff", bg, True)
+                self._stamp_vehicle(grid, x, z, veh.heading, self._emergency_cells(svc, veh, flash))
 
     def _draw_crews(self, grid):
         c = self.city
