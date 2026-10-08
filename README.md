@@ -186,6 +186,9 @@ reverse waypoints. Background traffic wanders the graph and stops for a car ahea
 | RESOLVED | incident cleared, crew walks back |
 | RETURNING -> COMPLETE | vehicle returns, reverses into its bay; unit is AVAILABLE again |
 
+If a unit finishes while another incident of its service is waiting and the depot has nothing free, it is **redirected
+straight there** as a new mission instead of driving back to base first.
+
 ## Development
 
 ```bash

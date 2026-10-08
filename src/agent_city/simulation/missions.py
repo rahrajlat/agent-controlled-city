@@ -148,6 +148,11 @@ class Mission:
             team.progress = min(1.0, self._timer / STOW_TIME)
             if self._timer >= STOW_TIME:
                 team.state, team.progress = TeamState.IN_VEHICLE, 0.0
+                # nothing free at the depot and another incident is waiting: go straight there, skip the base
+                nxt = None if self.depot.available() else city.next_incident_for(inc.service, exclude=inc)
+                if nxt is not None:
+                    self._redirect(nxt, city)
+                    return
                 v.set_route(city.plan_return(v, self.depot, inc))
                 v.lights_on = False
                 self._go(MissionStatus.RETURNING)
@@ -165,6 +170,24 @@ class Mission:
                 team.release()
                 self._go(MissionStatus.COMPLETE)
                 world.add_log(f"{self.vehicle_name} back at base", "available again", "ok", (inc.id,))
+
+    def _redirect(self, nxt, city):
+        """Hand this vehicle and crew straight to another incident as a new mission (no return to base)."""
+        world, v, team, old = city.world, self.vehicle, self.team, self.incident
+        m = Mission(world.next_id("mission"), nxt, self.depot, v, team, world.t)
+        v.mission_id = team.mission_id = m.id          # the reservation moves over; the unit never becomes free
+        world.missions[m.id] = m
+        nxt.status = IncidentStatus.RESPONDING
+        nxt.waiting_reason = ""
+        if nxt.dispatched_at is None:
+            nxt.dispatched_at = world.t
+        nxt.mission_ids.append(m.id)
+        m._door_closed = True                          # not leaving a bay, so no door to manage
+        v.set_route(city.plan_redeploy(v, nxt, team, slot=nxt.mission_ids.index(m.id)))
+        m._go(MissionStatus.EN_ROUTE)
+        self._go(MissionStatus.COMPLETE)
+        world.add_log(f"{self.vehicle_name} redirected", f"{old.site_name} -> {nxt.site_name}, skipping base", "alert", (nxt.id,))
+        world.add_log("Decision", f"{nxt.site_name}: nearest free unit is already out; sent directly", "agent", (nxt.id,))
 
     @property
     def is_active(self) -> bool:

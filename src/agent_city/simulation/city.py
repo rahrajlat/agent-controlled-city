@@ -18,6 +18,7 @@ from simulation.dispatcher import Dispatcher
 from simulation.incidents import (ESCALATE_AFTER, START_INTENSITY, Incident, IncidentStatus, IncidentType,
                                   Severity)
 from simulation.missions import Mission, MissionStatus
+from simulation.planner import priority_score
 from simulation.road_network import RoadGraph, dist
 from simulation.world_state import WorldState
 
@@ -105,10 +106,26 @@ class City:
             self.world.add_log(inc.label, f"New incident · severity {severity.value}", "alert", (inc.id,))
         return inc
 
+    def next_incident_for(self, service: str, exclude: Incident) -> Incident | None:
+        """The most urgent open incident of this service that still needs units, if any."""
+        now = self.world.t
+        needy = [i for i in self.open_incidents()
+                 if i is not exclude and i.service == service and self.units_assigned(i) < i.units_needed]
+        return max(needy, key=lambda i: priority_score(i, now), default=None)
+
     # ---- route planning ------------------------------------------------------
     def plan_departure(self, v, depot, inc: Incident, team, slot: int = 0) -> list[Waypoint]:
         bay = depot.bays[v.bay_index]
         nodes = self.graph.calculate_route(depot.access_node, inc.stand_hint)
+        return [Waypoint(bay.x, bay.door_z - 2.0, precise=True)] + self._scene_route(nodes, inc, team, slot)
+
+    def plan_redeploy(self, v, inc: Incident, team, slot: int = 0) -> list[Waypoint]:
+        """Route from where the vehicle stands now straight to another incident (no trip via the depot)."""
+        nodes = self.graph.calculate_route(tuple(v.pos), inc.stand_hint)
+        return self._scene_route(nodes, inc, team, slot)
+
+    def _scene_route(self, nodes, inc: Incident, team, slot: int) -> list[Waypoint]:
+        """Road nodes -> line up with the kerb -> park, and set where the crew will stand."""
         b = self.buildings[inc.building_id]
         if len(nodes) > 1:
             u = _unit(nodes[-1][0] - nodes[-2][0], nodes[-1][1] - nodes[-2][1])
@@ -125,8 +142,7 @@ class City:
         else:                # second unit stops just past it, so it never has to reverse
             park = (nodes[-1][0] + u[0] * 1.2 + side[0] * 1.0, nodes[-1][1] + u[1] * 1.2 + side[1] * 1.0)
             lineup = (nodes[-1][0] - u[0] * 1.5, nodes[-1][1] - u[1] * 1.5)
-        route = [Waypoint(bay.x, bay.door_z - 2.0, precise=True)]
-        route += [Waypoint(*n) for n in nodes[:-1]]
+        route = [Waypoint(*n) for n in nodes[:-1]]
         route.append(Waypoint(*lineup))                     # line up with the kerb first
         route.append(Waypoint(*park))
         fx, fz = b.front_point
