@@ -1,0 +1,16 @@
+[project]
+name = "agent-city"
+version = "0.1.0"
+description = "A terminal city-operations simulation (Textual) run by a Strands agent"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "strands-agents[ollama]>=1.58.1",
+    "textual>=0.80",
+]
+
+[dependency-groups]
+dev = [
+    "cairosvg>=2.9.1",
+    "pillow>=12.3.0",
+]
