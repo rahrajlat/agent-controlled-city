@@ -15,6 +15,15 @@ You create the emergencies. A [Strands](https://strandsagents.com) agent decides
 
 </div>
 
+## How it works
+
+1. **You play.** Create an incident: a fire, theft or flood at one of six sites, with a severity (`n`, `r` or `x`).
+2. **The incident is logged.** It is added to the shared city state and appears in the incidents panel and the activity feed.
+3. **The agent picks it up.** The planner notices the situation changed and sends the agent a snapshot of the city: open incidents, units needed, and which units are free.
+4. **The agent chooses the tool.** It ranks the incidents and calls a dispatch tool, usually `dispatch_plan`, with a reason for each order.
+5. **The tool updates the state.** The dispatcher validates the order, reserves a unit and starts a mission, so the incident now has a unit assigned.
+6. **The UI shows it.** The terminal redraws from that state on every tick, so you see the bay door open, the unit drive out, and the incident shrink until it is resolved.
+
 ## Why Agent City?
 
 Most agent demos are chat. This one is a **control problem**: limited resources, competing demands, a clock that keeps
