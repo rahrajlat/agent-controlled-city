@@ -15,6 +15,58 @@ You create the emergencies. A [Strands](https://strandsagents.com) agent decides
 
 </div>
 
+## Why Agent City?
+
+Most agent demos are chat. This one is a **control problem**: limited resources, competing demands, a clock that keeps
+running. There are 7 emergency units for 6 sites, HIGH severity incidents need two units each, and anything
+unattended escalates. The agent has to prioritise, and you can watch every decision, with its reasons, as it makes it.
+
+- **Sandbox for agent behaviour.** Swap the model, edit the system prompt, or add a tool and see what changes.
+- **A baseline to beat.** A deterministic `RulePlanner` solves the same problem, so you can compare the agent against it.
+- **Nothing hidden.** The Agent Info screen shows what the agent sees, its tools, guardrails and recent tool calls.
+- **Safe by construction.** The simulation exposes tools (`dispatch_*`); the agent cannot exceed `units_still_needed`.
+
+<div align="center">
+<img src="docs/assets/tour.gif" alt="Tour: the incident wizard, a flood response, and the agent info screen" width="860">
+</div>
+
+## What if an AI ran your city's emergency desk?
+
+Picture a dispatcher who never sleeps, never panics, and has to decide **right now**: a substation is on fire, a
+flood is rising at the park, and someone is robbing the warehouse. There are only 7 units, and two of those
+incidents need two of them. Who goes where?
+
+In Agent City that dispatcher is an LLM agent. You are the chaos.
+
+<div align="center">
+<img src="docs/assets/flow.gif" alt="Animated diagram: incident, sense, think, act, guard, roll, then repeat" width="800">
+</div>
+
+**How it identifies.** Nothing is hard-wired to an incident. Each time the situation changes, the agent is handed a
+fresh snapshot of the city: every open incident (what it is, where, how severe, how long it has waited, how many
+units it still needs) and every unit (free or deployed, and to what). It reads this the way a human dispatcher reads
+a screen.
+
+**How it decides.** Its instructions tell it to rank the incidents: higher severity first, then
+fire > flood > theft, then whoever has waited longest. It then serves them in that order and never promises more
+units than an incident needs. Unattended incidents escalate after about 45 s, so a bad call costs city health.
+
+**How it dispatches.** The agent does not move anything itself. It calls tools, mostly a single
+`dispatch_plan` with every order in priority order and a short reason for each. A guarded dispatcher validates the
+orders (right kind of unit, no over-assignment) and the units then drive the real road network to the scene.
+
+What you see in the activity feed looks like this (illustrative):
+
+```
+> To model     3 incidents, 7 units free
+< Model ordered  1. Substation fire (HIGH)   -> Engine 1, Engine 2   "highest severity, spreads fastest"
+                 2. Park flood   (MEDIUM) -> Rescue Truck 1       "second rank, one unit is enough"
+                 3. Warehouse theft (LOW) -> Police Car 1           "lowest rank, but units are free"
+```
+
+Because it is a closed loop, you can poke it: send a **crisis** (`x`) to create more demand than units, switch to
+the **rule planner** (`p`) to compare, or open **Agent Info** (`i`) to inspect exactly what the model sees and calls.
+
 ## Get started
 
 ```bash
@@ -36,21 +88,6 @@ Use a terminal of about **130x40** or larger.
 
 The agent needs Ollama running (`ollama signin` for the cloud model). If it is not reachable, the app falls back
 to the rule planner and says so in the activity feed.
-
-## Why Agent City?
-
-Most agent demos are chat. This one is a **control problem**: limited resources, competing demands, a clock that keeps
-running. There are 7 emergency units for 6 sites, HIGH severity incidents need two units each, and anything
-unattended escalates. The agent has to prioritise, and you can watch every decision, with its reasons, as it makes it.
-
-- **Sandbox for agent behaviour.** Swap the model, edit the system prompt, or add a tool and see what changes.
-- **A baseline to beat.** A deterministic `RulePlanner` solves the same problem, so you can compare the agent against it.
-- **Nothing hidden.** The Agent Info screen shows what the agent sees, its tools, guardrails and recent tool calls.
-- **Safe by construction.** The simulation exposes tools (`dispatch_*`); the agent cannot exceed `units_still_needed`.
-
-<div align="center">
-<img src="docs/assets/tour.gif" alt="Tour: the incident wizard, a flood response, and the agent info screen" width="860">
-</div>
 
 ## Features
 
@@ -155,6 +192,7 @@ reverse waypoints. Background traffic wanders the graph and stops for a car ahea
 uv sync                              # runtime + dev dependencies
 uv run python scripts/make_gifs.py   # regenerate the demo GIFs in docs/assets/
 uv run python scripts/make_logo.py   # regenerate the logo
+uv run python scripts/make_flow.py   # regenerate the flow diagram
 ```
 
 `scripts/make_gifs.py` drives the real Textual app headlessly with the rule planner and a fake clock, so the
